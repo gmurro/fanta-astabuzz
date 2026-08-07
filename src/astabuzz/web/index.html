@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0072e9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icon.png?v={{v}}">
+<link rel="icon" href="/icon.png?v={{v}}">
+<title>fanta-astabuzz</title>
+<style>
+:root{
+  --brand:#0072e9;
+  --brand-deep:#0055b4;
+  --ink:#fff;
+  /* .82 keeps secondary text above 4.5:1 on the brand blue */
+  --ink-soft:rgba(255,255,255,.82);
+  --line:rgba(255,255,255,.28);
+  --ok:#7dfcb6;
+  --err:#ffd6d6;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial;
+  color:var(--ink);
+  background:
+    radial-gradient(120% 80% at 50% -10%, #2a92ff 0%, rgba(42,146,255,0) 60%),
+    linear-gradient(180deg, var(--brand) 0%, var(--brand-deep) 100%);
+  background-attachment:fixed;
+  display:flex;flex-direction:column;overscroll-behavior:none;
+}
+.wrap{
+  flex:1;display:flex;flex-direction:column;gap:16px;
+  padding:max(18px,env(safe-area-inset-top)) 18px max(18px,env(safe-area-inset-bottom));
+  max-width:520px;width:100%;margin:0 auto;
+}
+.logo{display:block;height:30px;width:auto;margin:2px auto 0;opacity:.97}
+main{flex:1;display:flex;flex-direction:column;gap:14px;min-height:0}
+h1{font-size:18px;margin:0;font-weight:800;letter-spacing:.2px;text-align:center}
+p.sub{margin:0;color:var(--ink-soft);font-size:14px;text-align:center}
+.spacer{flex:1}
+.msg{text-align:center;font-size:15px;min-height:22px;font-weight:600;color:var(--ink-soft)}
+.msg[data-tone="ok"]{color:var(--ok)}
+.msg[data-tone="err"]{color:var(--err)}
+
+/* PIN */
+.dots{display:flex;gap:16px;justify-content:center;margin:6px 0}
+.dot{width:15px;height:15px;border-radius:50%;border:2px solid var(--line);transition:transform .12s}
+.dot[data-on="1"]{background:#fff;border-color:#fff;transform:scale(1.12)}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.keypad button{
+  padding:18px 0;font-size:26px;font-weight:700;color:var(--ink);
+  background:rgba(255,255,255,.14);border:1px solid var(--line);
+  border-radius:18px;transition:transform .08s,background .12s;
+}
+.keypad button:active{background:rgba(255,255,255,.3);transform:scale(.96)}
+
+/* pick */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.pick{
+  position:relative;border:0;background:transparent;padding:0;transition:transform .08s;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+}
+.pick:active{transform:scale(.93)}
+.pick img{width:100%;aspect-ratio:1;display:block;filter:drop-shadow(0 4px 8px rgba(0,26,66,.35))}
+/* the number printed on the button is unreadable at this size, so label it */
+.pick b{font-size:15px;font-weight:800;color:var(--ink-soft)}
+.pick[data-sel="1"] b{color:var(--ok)}
+.pick[data-sel="1"] img{outline:3px solid var(--ok);outline-offset:-2px;border-radius:50%}
+
+/* buzz */
+.buzzwrap{flex:1;display:grid;place-items:center;min-height:0}
+#buzz{
+  position:relative;border:0;background:transparent;padding:0;
+  width:min(78vw,330px);height:min(78vw,330px);
+  transition:transform .07s ease-out,filter .15s;
+}
+#buzz img{width:100%;height:100%;display:block;filter:drop-shadow(0 12px 24px rgba(0,26,66,.45))}
+#buzz:active{transform:scale(.955)}
+#buzz[data-state="wait"]{filter:saturate(.5) brightness(.82)}
+#ring{position:absolute;inset:-9px;width:calc(100% + 18px);height:calc(100% + 18px);transform:rotate(-90deg);pointer-events:none}
+#ring circle{fill:none;stroke:#fff;stroke-width:4;opacity:.9;stroke-linecap:round}
+.flash{position:absolute;inset:-9px;border-radius:50%;border:4px solid var(--ok);opacity:0;pointer-events:none}
+.flash[data-on="1"]{animation:pop .5s ease-out}
+@keyframes pop{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.14)}}
+.link{background:none;border:0;color:var(--ink-soft);text-decoration:underline;font-size:14px;padding:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="logo" src="/logo.webp?v={{v}}" alt="astabuzz">
+
+  <main id="s-pin">
+    <p class="sub">Ovunque, da qualsiasi dispositivo</p>
+    <p class="sub" style="margin-top:2px">Inserisci il PIN a 4 cifre</p>
+    <div class="dots" id="dots"></div>
+    <div class="msg" id="pin-msg"></div>
+    <div class="spacer"></div>
+    <div class="keypad" id="keypad"></div>
+  </main>
+
+  <main id="s-pick" hidden>
+    <h1>Qual è il tuo pulsante?</h1>
+    <p class="sub">Scegli il numero del pulsante</p>
+    <div class="grid" id="grid"></div>
+    <div class="spacer"></div>
+  </main>
+
+  <main id="s-buzz" hidden>
+    <h1 id="buzz-title">&mdash;</h1>
+    <div class="buzzwrap">
+      <button id="buzz" type="button" aria-label="Premi il pulsante">
+        <img id="buzz-img" src="" alt="">
+        <svg id="ring" viewBox="0 0 100 100" hidden><circle cx="50" cy="50" r="48"></circle></svg>
+        <span class="flash" id="flash"></span>
+      </button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <button class="link" id="change" type="button">Cambia pulsante</button>
+  </main>
+</div>
+
+<script>
+const V = "{{v}}";
+const $ = (id) => document.getElementById(id);
+const show = (id) => ["s-pin","s-pick","s-buzz"].forEach(s => $(s).hidden = (s !== id));
+
+// fetch has no timeout of its own, so a server that has gone away leaves the
+// page waiting forever with nothing on screen. Three seconds is far longer than
+// this ever needs on a LAN, and short enough to still feel like an answer.
+const REQUEST_TIMEOUT_MS = 3000;
+
+async function api(path, body) {
+  const opt = {method: body ? "POST" : "GET", headers: {"X-FB": "1"}, credentials: "same-origin"};
+  if (body) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+  const ctrl = new AbortController();
+  opt.signal = ctrl.signal;
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(path, opt);
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* empty body */ }
+    return {status: res.status, data};
+  } catch (e) {
+    // Status 0 covers both the timeout and an outright network failure: wifi
+    // dropped, tunnel closed, server stopped. Reporting that as "wrong PIN"
+    // sends people hunting for the wrong problem.
+    return {status: 0, data: null};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* ---- PIN ---- */
+let pin = "";
+function renderDots() {
+  $("dots").innerHTML = "";
+  for (let i = 0; i < 4; i++) {
+    const d = document.createElement("div");
+    d.className = "dot";
+    d.dataset.on = i < pin.length ? "1" : "0";
+    $("dots").appendChild(d);
+  }
+}
+function buildKeypad() {
+  $("keypad").innerHTML = "";
+  for (const k of ["1","2","3","4","5","6","7","8","9","","0","⌫"]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = k;
+    if (k === "") { b.style.visibility = "hidden"; }
+    b.addEventListener("click", () => onKey(k));
+    $("keypad").appendChild(b);
+  }
+}
+async function onKey(k) {
+  $("pin-msg").textContent = "";
+  if (k === "⌫") { pin = pin.slice(0, -1); renderDots(); return; }
+  if (k === "" || pin.length >= 4) { return; }
+  pin += k;
+  renderDots();
+  if (pin.length === 4) {
+    $("pin-msg").dataset.tone = "";
+    $("pin-msg").textContent = "Verifica…";
+    const {status} = await api("/api/login", {pin});
+    pin = ""; renderDots();
+    if (status === 200) { await afterLogin(); return; }
+    $("pin-msg").dataset.tone = "err";
+    if (status === 0) {
+      $("pin-msg").textContent = "Nessuna connessione al server";
+    } else if (status === 401) {
+      $("pin-msg").textContent = "PIN errato";
+    } else {
+      $("pin-msg").textContent = `Richiesta rifiutata (${status})`;
+    }
+  }
+}
+
+/* ---- pick ---- */
+let buttons = [];
+async function afterLogin() {
+  const {status, data} = await api("/api/config");
+  if (status !== 200) { show("s-pin"); return; }
+  buttons = data.buttons;
+  const saved = localStorage.getItem("fb_button");
+  $("grid").innerHTML = "";
+  for (const b of buttons) {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "pick";
+    el.dataset.sel = String(b.n) === saved ? "1" : "0";
+    el.innerHTML = '<img alt=""><b></b>';
+    el.querySelector("img").src = `/button-${b.n}-sm.webp?v=${V}`;
+    el.querySelector("b").textContent = b.label;
+    el.setAttribute("aria-label", b.label);
+    el.addEventListener("click", () => choose(b.n));
+    $("grid").appendChild(el);
+  }
+  if (saved && buttons.some(b => String(b.n) === saved)) { choose(Number(saved)); }
+  else { show("s-pick"); }
+}
+function choose(n) {
+  localStorage.setItem("fb_button", String(n));
+  const b = buttons.find(x => x.n === n);
+  $("buzz-img").src = `/button-${n}.webp?v=${V}`;
+  $("buzz-title").textContent = "Pulsante " + b.label;
+  $("buzz").setAttribute("aria-label", "Premi " + b.label);
+  $("buzz").dataset.n = String(n);
+  say("", "");
+  show("s-buzz");
+}
+$("change").addEventListener("click", () => show("s-pick"));
+
+/* ---- buzz ---- */
+const RING = 2 * Math.PI * 48;
+let locked = false;
+function say(text, tone) { $("msg").textContent = text; $("msg").dataset.tone = tone || ""; }
+
+function cooldown(ms) {
+  locked = true;
+  const buzz = $("buzz"), ring = $("ring"), circle = ring.querySelector("circle");
+  buzz.disabled = true;
+  buzz.dataset.state = "wait";
+  ring.hidden = false;
+  circle.style.strokeDasharray = RING;
+  const start = performance.now();
+  const tick = () => {
+    const left = Math.max(0, ms - (performance.now() - start));
+    circle.style.strokeDashoffset = RING * (1 - left / ms);
+    if (left === 0) {
+      ring.hidden = true;
+      buzz.disabled = false;
+      buzz.dataset.state = "";
+      locked = false;
+      say("", "");
+      return;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+$("buzz").addEventListener("click", async () => {
+  if (locked) { return; }
+  locked = true;
+  // Something must change on the very first frame, or a slow answer reads as a
+  // tap that did not register and the player taps again.
+  $("buzz").dataset.state = "wait";
+  say("Invio…", "");
+  const {status, data} = await api("/api/press", {button: Number($("buzz").dataset.n)});
+  if (status === 0) {
+    // A dropped connection must never look like a press that landed.
+    locked = false;
+    $("buzz").dataset.state = "";
+    say("Nessuna connessione", "err");
+    return;
+  }
+  if (status === 200) {
+    if (navigator.vibrate) { navigator.vibrate(55); }
+    const f = $("flash");
+    f.dataset.on = "0"; void f.offsetWidth; f.dataset.on = "1";
+    say(data.label + " inviato", "ok");
+    cooldown(800);
+  } else if (status === 429) {
+    say("Troppo veloce", "err");
+    cooldown(data.retry_after_ms);
+  } else if (status === 401) {
+    locked = false;
+    $("buzz").dataset.state = "";
+    show("s-pin");
+  } else {
+    locked = false;
+    $("buzz").dataset.state = "";
+    say(`Errore ${status}, riprova`, "err");
+  }
+});
+
+/* ---- boot ---- */
+buildKeypad();
+renderDots();
+api("/api/config").then(({status}) => { if (status === 200) { afterLogin(); } else { show("s-pin"); } });
+</script>
+</body>
+</html>
